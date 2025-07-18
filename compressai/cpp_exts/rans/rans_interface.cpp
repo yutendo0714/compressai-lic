@@ -287,7 +287,7 @@ RansDecoder::decode_with_indexes(const std::string &encoded,
 
     const auto cdf_end = cdf.begin() + cdfs_sizes[cdf_idx];
     const auto it = std::find_if(cdf.begin(), cdf_end,
-                                 [cum_freq](int v) { return v > cum_freq; });
+                                 [cum_freq](uint32_t v) { return v > cum_freq; });
     assert(it != cdf_end + 1);
     const uint32_t s = std::distance(cdf.begin(), it) - 1;
 
