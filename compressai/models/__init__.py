@@ -33,3 +33,5 @@ from .pointcloud import *
 from .sensetime import *
 from .vbr import *
 from .waseda import *
+from .mlicpp import *
+from .tcm import *
