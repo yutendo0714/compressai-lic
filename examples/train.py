@@ -31,11 +31,12 @@ import argparse
 import random
 import shutil
 import sys
+import os
+import logging
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
@@ -43,6 +44,21 @@ from compressai.datasets import ImageFolder
 from compressai.losses import RateDistortionLoss
 from compressai.optimizers import net_aux_optimizer
 from compressai.zoo import image_models
+from torch.utils.tensorboard import SummaryWriter
+
+
+def setup_logging(save_dir):
+    log_file = os.path.join(save_dir, "train.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, mode='w'),
+            logging.StreamHandler(sys.stdout)
+        ],
+    )
+    logger = logging.getLogger(__name__)
+    return logger
 
 
 class AverageMeter:
@@ -83,7 +99,8 @@ def configure_optimizers(net, args):
 
 
 def train_one_epoch(
-    model, criterion, train_dataloader, optimizer, aux_optimizer, epoch, clip_max_norm
+    model, criterion, train_dataloader, optimizer, aux_optimizer,
+    epoch, clip_max_norm, logger, writer=None
 ):
     model.train()
     device = next(model.parameters()).device
@@ -95,8 +112,8 @@ def train_one_epoch(
         aux_optimizer.zero_grad()
 
         out_net = model(d)
-
         out_criterion = criterion(out_net, d)
+
         out_criterion["loss"].backward()
         if clip_max_norm > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), clip_max_norm)
@@ -107,18 +124,25 @@ def train_one_epoch(
         aux_optimizer.step()
 
         if i % 10 == 0:
-            print(
-                f"Train epoch {epoch}: ["
-                f"{i*len(d)}/{len(train_dataloader.dataset)}"
-                f" ({100. * i / len(train_dataloader):.0f}%)]"
-                f'\tLoss: {out_criterion["loss"].item():.3f} |'
-                f'\tMSE loss: {out_criterion["mse_loss"].item():.3f} |'
-                f'\tBpp loss: {out_criterion["bpp_loss"].item():.2f} |'
-                f"\tAux loss: {aux_loss.item():.2f}"
+            msg = (
+                f"Train epoch {epoch}: [{i*len(d)}/{len(train_dataloader.dataset)} "
+                f"({100. * i / len(train_dataloader):.0f}%)] "
+                f"Loss: {out_criterion['loss'].item():.3f} | "
+                f"MSE: {out_criterion['mse_loss'].item():.3f} | "
+                f"Bpp: {out_criterion['bpp_loss'].item():.3f} | "
+                f"Aux: {aux_loss.item():.3f}"
             )
+            logger.info(msg)
+
+            if writer:
+                step = epoch * len(train_dataloader) + i
+                writer.add_scalar('train/total_loss', out_criterion["loss"].item(), step)
+                writer.add_scalar('train/mse_loss', out_criterion["mse_loss"].item(), step)
+                writer.add_scalar('train/bpp_loss', out_criterion["bpp_loss"].item(), step)
+                writer.add_scalar('train/aux_loss', aux_loss.item(), step)
 
 
-def test_epoch(epoch, test_dataloader, model, criterion):
+def test_epoch(epoch, test_dataloader, model, criterion, logger, writer=None):
     model.eval()
     device = next(model.parameters()).device
 
@@ -138,13 +162,19 @@ def test_epoch(epoch, test_dataloader, model, criterion):
             loss.update(out_criterion["loss"])
             mse_loss.update(out_criterion["mse_loss"])
 
-    print(
-        f"Test epoch {epoch}: Average losses:"
-        f"\tLoss: {loss.avg:.3f} |"
-        f"\tMSE loss: {mse_loss.avg:.3f} |"
-        f"\tBpp loss: {bpp_loss.avg:.2f} |"
-        f"\tAux loss: {aux_loss.avg:.2f}\n"
+    logger.info(
+        f"Test epoch {epoch}: "
+        f"Loss: {loss.avg:.3f} | "
+        f"MSE: {mse_loss.avg:.3f} | "
+        f"Bpp: {bpp_loss.avg:.3f} | "
+        f"Aux: {aux_loss.avg:.3f}"
     )
+
+    if writer:
+        writer.add_scalar('test/loss', loss.avg, epoch)
+        writer.add_scalar('test/mse_loss', mse_loss.avg, epoch)
+        writer.add_scalar('test/bpp_loss', bpp_loss.avg, epoch)
+        writer.add_scalar('test/aux_loss', aux_loss.avg, epoch)
 
     return loss.avg
 
@@ -229,12 +259,25 @@ def parse_args(argv):
         help="gradient clipping max norm (default: %(default)s",
     )
     parser.add_argument("--checkpoint", type=str, help="Path to a checkpoint")
+    parser.add_argument("--save_dir", type=str, default="./runs/")
     args = parser.parse_args(argv)
     return args
 
 
 def main(argv):
     args = parse_args(argv)
+
+    # --- output directory ---
+    save_dir = os.path.join(args.save_dir, args.model)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # --- logger & tensorboard setup ---
+    logger = setup_logging(save_dir)
+    writer = SummaryWriter(log_dir=os.path.join(save_dir, "tensorboard"))
+
+    logger.info("==== Training Configuration ====")
+    for arg in vars(args):
+        logger.info(f"{arg}: {getattr(args, arg)}")
 
     if args.seed is not None:
         torch.manual_seed(args.seed)
@@ -252,6 +295,7 @@ def main(argv):
     test_dataset = ImageFolder(args.dataset, split="test", transform=test_transforms)
 
     device = "cuda" if args.cuda and torch.cuda.is_available() else "cpu"
+    logger.info(f"Using device: {device}")
 
     train_dataloader = DataLoader(
         train_dataset,
@@ -280,8 +324,8 @@ def main(argv):
     criterion = RateDistortionLoss(lmbda=args.lmbda)
 
     last_epoch = 0
-    if args.checkpoint:  # load from previous checkpoint
-        print("Loading", args.checkpoint)
+    if args.checkpoint:
+        logger.info(f"Loading checkpoint: {args.checkpoint}")
         checkpoint = torch.load(args.checkpoint, map_location=device)
         last_epoch = checkpoint["epoch"] + 1
         net.load_state_dict(checkpoint["state_dict"])
@@ -291,7 +335,7 @@ def main(argv):
 
     best_loss = float("inf")
     for epoch in range(last_epoch, args.epochs):
-        print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
+        logger.info(f"=== Epoch {epoch}/{args.epochs} - LR: {optimizer.param_groups[0]['lr']:.6f} ===")
         train_one_epoch(
             net,
             criterion,
@@ -300,25 +344,28 @@ def main(argv):
             aux_optimizer,
             epoch,
             args.clip_max_norm,
+            logger,
+            writer
         )
-        loss = test_epoch(epoch, test_dataloader, net, criterion)
+        loss = test_epoch(epoch, test_dataloader, net, criterion, logger, writer)
         lr_scheduler.step(loss)
 
         is_best = loss < best_loss
         best_loss = min(loss, best_loss)
 
         if args.save:
-            save_checkpoint(
-                {
-                    "epoch": epoch,
-                    "state_dict": net.state_dict(),
-                    "loss": loss,
-                    "optimizer": optimizer.state_dict(),
-                    "aux_optimizer": aux_optimizer.state_dict(),
-                    "lr_scheduler": lr_scheduler.state_dict(),
-                },
-                is_best,
-            )
+            ckpt_path = os.path.join(save_dir, f"epoch_{epoch}_checkpoint.pth.tar")
+            save_checkpoint({
+                "epoch": epoch,
+                "state_dict": net.state_dict(),
+                "loss": loss,
+                "optimizer": optimizer.state_dict(),
+                "aux_optimizer": aux_optimizer.state_dict(),
+                "lr_scheduler": lr_scheduler.state_dict(),
+            }, is_best, filename=ckpt_path)
+
+    writer.close()
+    logger.info("Training completed successfully.")
 
 
 if __name__ == "__main__":
