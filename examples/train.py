@@ -127,9 +127,9 @@ def train_one_epoch(
             msg = (
                 f"Train epoch {epoch}: [{i*len(d)}/{len(train_dataloader.dataset)} "
                 f"({100. * i / len(train_dataloader):.0f}%)] "
-                f"Loss: {out_criterion['loss'].item():.3f} | "
-                f"MSE: {out_criterion['mse_loss'].item():.3f} | "
-                f"Bpp: {out_criterion['bpp_loss'].item():.3f} | "
+                f"Loss: {out_criterion['loss'].item():.3f}  |  "
+                f"MSE: {out_criterion['mse_loss'].item():.3f}  |  "
+                f"Bpp: {out_criterion['bpp_loss'].item():.3f}  |  "
                 f"Aux: {aux_loss.item():.3f}"
             )
             logger.info(msg)
