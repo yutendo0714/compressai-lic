@@ -33,6 +33,7 @@ import shutil
 import sys
 import os
 import logging
+import datetime
 
 import torch
 import torch.nn as nn
@@ -268,7 +269,8 @@ def main(argv):
     args = parse_args(argv)
 
     # --- output directory ---
-    save_dir = os.path.join(args.save_dir, args.model)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    save_dir = os.path.join(args.save_dir, f"{args.model}_{timestamp}")
     os.makedirs(save_dir, exist_ok=True)
 
     # --- logger & tensorboard setup ---
