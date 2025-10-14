@@ -27,6 +27,7 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import torch
 from torch.hub import load_state_dict_from_url
 
 from compressai.models import (
@@ -37,6 +38,8 @@ from compressai.models import (
     JointAutoregressiveHierarchicalPriors,
     MeanScaleHyperprior,
     ScaleHyperprior,
+    MLICPlusPlus,
+    TCM,
 )
 
 from .pretrained import load_pretrained
@@ -49,6 +52,8 @@ __all__ = [
     "mbt2018_mean",
     "cheng2020_anchor",
     "cheng2020_attn",
+    "mlicplusplus",
+    "tcm",
 ]
 
 model_architectures = {
@@ -59,6 +64,8 @@ model_architectures = {
     "mbt2018": JointAutoregressiveHierarchicalPriors,
     "cheng2020-anchor": Cheng2020Anchor,
     "cheng2020-attn": Cheng2020Attention,
+    "mlicplusplus": MLICPlusPlus,
+    "tcm": TCM,
 }
 
 root_url = "https://compressai.s3.amazonaws.com/models/v1"
@@ -187,6 +194,34 @@ model_urls = {
             6: f"{root_url}/cheng2020_attn-ms-ssim-6-216423ec.pth.tar",
         },
     },
+    "mlicplusplus": {
+        "mse": {
+            1: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_mse_q1.pth.tar",
+            2: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_mse_q2.pth.tar",
+            3: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_mse_q3.pth.tar",
+            4: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_mse_q4.pth.tar",
+            5: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_mse_q5.pth.tar",
+            6: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_mse_q6.pth.tar",
+        },
+        "ms-ssim": {
+            1: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_msssim_q1.pth.tar",
+            2: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_msssim_q2.pth.tar",
+            3: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_msssim_q3.pth.tar",
+            4: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_msssim_q4.pth.tar",
+            5: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_msssim_q5.pth.tar",
+            6: "/dpl/datasets/yutendo/pretrained/mlic/mlicpp_new_msssim_q6.pth.tar",
+        },
+    },
+    "tcm": {
+        "mse": {
+            1: "/dpl/datasets/yutendo/pretrained/tcm/0.0025.pth.tar",
+            2: "/dpl/datasets/yutendo/pretrained/tcm/0.0035.pth.tar",
+            3: "/dpl/datasets/yutendo/pretrained/tcm/0.0067.pth.tar",
+            4: "/dpl/datasets/yutendo/pretrained/tcm/0.013.pth.tar",
+            5: "/dpl/datasets/yutendo/pretrained/tcm/0.025.pth.tar",
+            6: "/dpl/datasets/yutendo/pretrained/tcm/0.05.pth.tar",
+        },
+    },
 }
 
 cfgs = {
@@ -256,6 +291,22 @@ cfgs = {
         5: (192,),
         6: (192,),
     },
+    "mlicplusplus": {
+        1: (192, 320),
+        2: (192, 320),
+        3: (192, 320),
+        4: (192, 320),
+        5: (192, 320),
+        6: (192, 320),
+    },
+    "tcm": {
+        1: (64, 320),
+        2: (64, 320),
+        3: (64, 320),
+        4: (64, 320),
+        5: (64, 320),
+        6: (64, 320),
+    },
 }
 
 
@@ -277,7 +328,10 @@ def _load_model(
             raise RuntimeError("Pre-trained model not yet available")
 
         url = model_urls[architecture][metric][quality]
-        state_dict = load_state_dict_from_url(url, progress=progress)
+        if url.startswith("/") or url.startswith("./"):
+            state_dict = torch.load(url, map_location="cpu")
+        else:
+            state_dict = load_state_dict_from_url(url, progress=progress)
         state_dict = load_pretrained(state_dict)
         model = model_architectures[architecture].from_state_dict(state_dict)
         return model
@@ -447,3 +501,39 @@ def cheng2020_attn(quality, metric="mse", pretrained=False, progress=True, **kwa
     return _load_model(
         "cheng2020-attn", metric, quality, pretrained, progress, **kwargs
     )
+
+
+def mlicplusplus(quality=1, metric="mse", pretrained=False, progress=True, **kwargs):
+    """
+    MLIC++: Multi-Level Image Compression Plus Plus
+    自作モデル (2025).
+    Args:
+        quality (int): 1〜6 (lambda=0.0018〜0.0483)
+        metric (str): 'mse' または 'ms-ssim'
+        pretrained (bool): TrueでGoogle Driveの学習済み重みをロード
+    """
+    if metric not in ("mse", "ms-ssim"):
+        raise ValueError(f'Invalid metric "{metric}" (choose "mse" or "ms-ssim")')
+
+    if quality < 1 or quality > 6:
+        raise ValueError(f'Invalid quality "{quality}", should be between 1 and 6')
+
+    return _load_model("mlicplusplus", metric, quality, pretrained, progress, **kwargs)
+
+
+def tcm(quality=1, metric="mse", pretrained=False, progress=True, **kwargs):
+    """
+    TCM: Transformer-based Compression Model
+    自作モデル (2025).
+    Args:
+        quality (int): 1〜6 (lambda=0.0025〜0.05)
+        metric (str): 'mse' または 'ms-ssim'
+        pretrained (bool): Trueで学習済み重みをロード
+    """
+    if metric not in ("mse", "ms-ssim"):
+        raise ValueError(f'Invalid metric "{metric}" (choose "mse" or "ms-ssim")')
+
+    if quality < 1 or quality > 6:
+        raise ValueError(f'Invalid quality "{quality}", should be between 1 and 6')
+
+    return _load_model("tcm", metric, quality, pretrained, progress, **kwargs)

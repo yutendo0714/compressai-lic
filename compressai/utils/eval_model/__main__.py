@@ -452,6 +452,8 @@ def main(argv):  # noqa: C901
             sys.stderr.flush()
         if not is_vbr_model:
             model = load_func(*opts, run)
+            model.update(force=True)
+
         else:
             # update bottleneck for every new quant_step if vbr bottleneck is used in the model
             if (
