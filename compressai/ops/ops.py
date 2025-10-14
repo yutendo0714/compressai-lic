@@ -78,3 +78,7 @@ def quantize_ste(x: Tensor) -> Tensor:
         `x_round = x_round - x.detach() + x`
     """
     return (torch.round(x) - x).detach() + x
+
+
+def ste_round(x):
+    return (x - x.detach()) + x.detach().round()
