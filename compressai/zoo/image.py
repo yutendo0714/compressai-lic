@@ -40,6 +40,7 @@ from compressai.models import (
     ScaleHyperprior,
     MLICPlusPlus,
     TCM,
+    TCMSIMVQ
 )
 
 from .pretrained import load_pretrained
@@ -54,6 +55,7 @@ __all__ = [
     "cheng2020_attn",
     "mlicplusplus",
     "tcm",
+    "tcmsimvq",
 ]
 
 model_architectures = {
@@ -66,6 +68,7 @@ model_architectures = {
     "cheng2020-attn": Cheng2020Attention,
     "mlicplusplus": MLICPlusPlus,
     "tcm": TCM,
+    "tcmsimvq": TCMSIMVQ,
 }
 
 root_url = "https://compressai.s3.amazonaws.com/models/v1"
@@ -300,12 +303,20 @@ cfgs = {
         6: (192, 320),
     },
     "tcm": {
-        1: (64, 320),
-        2: (64, 320),
-        3: (64, 320),
-        4: (64, 320),
-        5: (64, 320),
-        6: (64, 320),
+        1: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        2: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        3: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        4: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        5: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        6: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+    },
+    "tcmsimvq": {
+        1: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        2: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        3: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        4: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        5: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
+        6: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
     },
 }
 
@@ -537,3 +548,20 @@ def tcm(quality=1, metric="mse", pretrained=False, progress=True, **kwargs):
         raise ValueError(f'Invalid quality "{quality}", should be between 1 and 6')
 
     return _load_model("tcm", metric, quality, pretrained, progress, **kwargs)
+
+
+def tcmsimvq(quality=1, metric="mse", pretrained=False, progress=True, **kwargs):
+    """
+    TCMSIMVQ: simvqによるtcm combo
+    Args:
+        quality (int): 1〜6 (lambda=0.0025〜0.05)
+        metric (str): 'mse' または 'ms-ssim'
+        pretrained (bool): Trueで学習済み重みをロード
+    """
+    if metric not in ("mse", "ms-ssim"):
+        raise ValueError(f'Invalid metric "{metric}" (choose "mse" or "ms-ssim")')
+
+    if quality < 1 or quality > 6:
+        raise ValueError(f'Invalid quality "{quality}", should be between 1 and 6')
+
+    return _load_model("tcmsimvq", metric, quality, pretrained, progress, **kwargs)
