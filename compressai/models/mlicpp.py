@@ -8,6 +8,7 @@ from compressai.ans import BufferedRansEncoder, RansDecoder
 from .modules.func import update_registered_buffers, get_scale_table
 from .modules.ckbd import *
 from .modules.transform import *
+from .modules.config import model_config
 
 
 class MLICPlusPlus(CompressionModel):
@@ -373,13 +374,39 @@ class MLICPlusPlus(CompressionModel):
         }
 
     def load_state_dict(self, state_dict):
-        update_registered_buffers(
-            self.gaussian_conditional,
-            "gaussian_conditional",
-            ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"],
-            state_dict,
-        )
-        super().load_state_dict(state_dict)
+        # gaussian_conditional の登録bufferが存在する場合だけ更新する
+        gc_keys = ["_quantized_cdf", "_offset", "_cdf_length", "scale_table"]
+        has_gc_buffers = all(f"gaussian_conditional.{k}" in state_dict for k in gc_keys)
+
+        if has_gc_buffers:
+            update_registered_buffers(
+                self.gaussian_conditional,
+                "gaussian_conditional",
+                gc_keys,
+                state_dict,
+            )
+        else:
+            print("[MLICPlusPlus] gaussian_conditional buffers not found in state_dict, skipping buffer update.")
+
+        # 通常の重みをロード
+        super().load_state_dict(state_dict, strict=False)
+
+
+    @classmethod
+    def from_state_dict(cls, state_dict, **kwargs):
+        """
+        Create an MLICPlusPlus instance from a pretrained state_dict.
+        This makes it compatible with compressai.zoo image loader.
+        """
+        config = model_config()
+
+        # モデルを構築
+        model = cls(config, **kwargs)
+
+        # state_dict をロード
+        model.load_state_dict(state_dict)
+        return model
+
 
     def update(self, scale_table=None, force=False):
         if scale_table is None:
