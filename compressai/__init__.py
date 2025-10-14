@@ -39,6 +39,7 @@ from compressai import (
     registry,
     transforms,
     typing,
+    vq,
     zoo,
 )
 
