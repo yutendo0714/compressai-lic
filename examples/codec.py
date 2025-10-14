@@ -368,6 +368,8 @@ def _encode(input, num_of_frames, model, metric, quality, coder, device, output)
     start = time.time()
     model_info = models[model]
     net = model_info(quality=quality, metric=metric, pretrained=True).to(device).eval()
+    if hasattr(net, "update"):
+        net.update(force=True)
     codec_type = (
         CodecType.IMAGE_CODEC if model in image_models else CodecType.VIDEO_CODEC
     )
@@ -475,6 +477,8 @@ def _decode(inputpath, coder, show, device, output=None):
             .to(device)
             .eval()
         )
+        if hasattr(net, "update"):
+            net.update(force=True)
         codec_type = (
             CodecType.IMAGE_CODEC if model in image_models else CodecType.VIDEO_CODEC
         )
