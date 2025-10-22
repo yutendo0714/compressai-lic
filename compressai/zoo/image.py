@@ -40,7 +40,8 @@ from compressai.models import (
     ScaleHyperprior,
     MLICPlusPlus,
     TCM,
-    TCMSIMVQ
+    TCMSIMVQ,
+    NVTCCompressAI,
 )
 
 from .pretrained import load_pretrained
@@ -56,6 +57,7 @@ __all__ = [
     "mlicplusplus",
     "tcm",
     "tcmsimvq",
+    "nvtc",
 ]
 
 model_architectures = {
@@ -69,6 +71,7 @@ model_architectures = {
     "mlicplusplus": MLICPlusPlus,
     "tcm": TCM,
     "tcmsimvq": TCMSIMVQ,
+    "nvtc": NVTCCompressAI,
 }
 
 root_url = "https://compressai.s3.amazonaws.com/models/v1"
@@ -318,6 +321,14 @@ cfgs = {
         5: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
         6: ([2, 2, 2, 2, 2, 2], [8, 16, 32, 32, 16, 8], 0.0, 64, 320),
     },
+    "nvtc": {
+        1: (256, 3, (4,6,6), (4,8,16), (128,128,128), (2,2,2), (4,4,4), (4,8,16), (64,128,256), (4,4,4), (128,64,32), True, False),
+        2: (512, 3, (4,6,6), (4,8,16), (160,160,160), (2,2,2), (4,4,4), (4,8,16), (128,256,512), (4,4,4), (128,64,32), True, False),
+        3: (1024, 3, (4,6,6), (4,8,16), (192,192,192), (2,2,2), (4,4,4), (4,8,16), (128,256,512), (4,4,4), (128,64,32), True, False),
+        4: (2048, 3, (4,6,6), (4,8,16), (224,224,224), (2,2,2), (4,4,4), (4,8,16), (192,384,768), (4,4,4), (128,64,32), True, False),
+        5: (4096, 3, (4,6,6), (4,8,16), (256,256,256), (2,2,2), (4,4,4), (4,8,16), (256,512,1024), (4,4,4), (128,64,32), True, False),
+    },
+
 }
 
 
@@ -565,3 +576,20 @@ def tcmsimvq(quality=1, metric="mse", pretrained=False, progress=True, **kwargs)
         raise ValueError(f'Invalid quality "{quality}", should be between 1 and 6')
 
     return _load_model("tcmsimvq", metric, quality, pretrained, progress, **kwargs)
+
+
+def nvtc(quality=1, metric="mse", pretrained=False, progress=True, **kwargs):
+    """
+    NVTC: Neural Vector Transformer Compression (自作モデル, 2025).
+    Args:
+        quality (int): 1〜5
+        metric (str): 'mse' または 'ms-ssim'
+        pretrained (bool): Trueで学習済み重みをロード
+    """
+    if metric not in ("mse", "ms-ssim"):
+        raise ValueError(f'Invalid metric "{metric}" (choose "mse" or "ms-ssim")')
+
+    if quality < 1 or quality > 5:
+        raise ValueError(f'Invalid quality "{quality}", should be between 1 and 5')
+
+    return _load_model("nvtc", metric, quality, pretrained, progress, **kwargs)
