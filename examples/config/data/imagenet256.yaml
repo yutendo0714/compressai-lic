@@ -3,4 +3,4 @@ init_args:
   root_dir: /dpl/datasets/imagenet_256
   crop_size: 256
   batch_size: 16
-  num_workers: 16
+  num_workers: 8
