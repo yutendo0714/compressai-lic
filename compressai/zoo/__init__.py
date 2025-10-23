@@ -38,7 +38,6 @@ from .image import (
     mlicplusplus,
     tcm,
     tcmsimvq,
-    nvtc,
 )
 from .image_vbr import bmshj2018_hyperprior_vbr, mbt2018_mean_vbr, mbt2018_vbr
 from .pretrained import load_pretrained as load_state_dict
@@ -58,7 +57,6 @@ image_models = {
     "mlicplusplus": mlicplusplus,
     "tcm": tcm,
     "tcmsimvq": tcmsimvq,
-    "nvtc": nvtc,
 }
 
 # Not yet available.
