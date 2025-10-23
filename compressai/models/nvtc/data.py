@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import lightning.pytorch as pl
+from compressai.datasets import ImageFolder 
 
 
 class ImageLMDBDataset(Dataset):
@@ -117,4 +118,56 @@ class ImageCodingDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(self.test_set, batch_size=1, shuffle=False, num_workers=self.num_workers)
 
-        
+
+# nvtc_image/data/imagenet_datamodule.py
+class ImageNetDataModule(pl.LightningDataModule):
+    def __init__(self, root_dir: str, crop_size: int = 256,
+                 batch_size: int = 32, num_workers: int = 8):
+        super().__init__()
+        self.root_dir = root_dir
+        self.crop_size = crop_size
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+    def setup(self, stage=None):
+        train_transforms = transforms.Compose([
+            transforms.RandomCrop(self.crop_size),
+            transforms.ToTensor()
+        ])
+        test_transforms = transforms.Compose([
+            transforms.CenterCrop(self.crop_size),
+            transforms.ToTensor()
+        ])
+
+        if stage in (None, "fit"):
+            self.train_set = ImageFolder(self.root_dir, split="train", transform=train_transforms)
+            self.val_set = ImageFolder(self.root_dir, split="val", transform=test_transforms)
+        if stage in (None, "test"):
+            self.test_set = ImageFolder(self.root_dir, split="val", transform=test_transforms)
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_set,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_set,
+            batch_size=1,
+            shuffle=False,
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_set,
+            batch_size=1,
+            shuffle=False,
+            num_workers=self.num_workers,
+            pin_memory=True
+        )
